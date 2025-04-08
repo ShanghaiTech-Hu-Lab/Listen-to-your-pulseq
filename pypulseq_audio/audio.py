@@ -14,6 +14,45 @@ def is_jupyter_notebook():
         pass
     return False
 
+
+def duration_update(self: Sequence, append_only = True) -> tuple:
+    """
+    Duration calculation with reduced time cost. Designed for environments where duration is treated as an iteration condition.
+
+    Parameters
+    ----------
+    self : Sequence
+        The sequence object.
+    append_only : bool, optional
+        If you can ensure that blocks will only be added sequentially and not deleted or inserted, then True. Else False.
+
+    Returns
+    ----------
+    duration : float
+        The total duration of the sequence in seconds.
+    """
+    if not hasattr(self, '_duration_history'):
+        duration = 0
+        for block_counter in self.block_events.keys():
+            duration += self.block_durations[block_counter]
+        self._duration_history = (duration, next(reversed(self.block_events.keys()))) if append_only else (duration, self.block_events.copy())
+        return duration
+    else:
+        duration = self._duration_history[0]
+        if append_only:
+            start_key = self._duration_history[1]
+            keys = list(self.block_events.keys())
+            for block_counter in keys[keys.index(start_key)+1:]:
+                duration += self.block_durations[block_counter]
+        else:
+            for block_counter in set(self.block_events.keys()).difference(self._duration_history[1].keys()):
+                duration += self.block_durations[block_counter]
+            for block_counter in set(self._duration_history[1].keys()).difference(self.block_events.keys()):
+                duration -= self.block_durations[block_counter]
+        self._duration_history = (duration, next(reversed(self.block_events.keys()))) if append_only else (duration, self.block_events.copy())
+        return duration
+
+
 def listen(
     self: Sequence,
     speaker: callable = None,
@@ -23,7 +62,7 @@ def listen(
     grad_disp: str = 'kHz/m',
     play_now: bool = True,
     rate: int = 44100,
-) -> np.ndarray:
+) -> None:
     """
     Listen to the waveform of the sequence.
 
@@ -58,14 +97,14 @@ def listen(
             from IPython.display import Audio, display
             speaker = Audio
 
+    # waveform = self.waveforms_and_times(time_range=time_range)
+
     valid_time_units = ['s', 'ms', 'us']
     valid_grad_units = ['kHz/m', 'mT/m']
     if not all(isinstance(x, (int, float)) for x in time_range) or len(time_range) != 2:
         raise ValueError('Invalid time range')
     if time_disp not in valid_time_units:
         raise ValueError('Unsupported time unit')
-    
-    rate = int(1/self.system.grad_raster_time)
 
     t_factor_list = [1, 1e3, 1e6]
     t_factor = t_factor_list[valid_time_units.index(time_disp)]
@@ -88,7 +127,7 @@ def listen(
                 if getattr(block, grad_channels[x], None) is not None:
                     grad = getattr(block, grad_channels[x])
                     if grad.type == 'grad':
-                        time = (grad.delay + np.array([0, *grad.tt, grad.shape_dur]) + t0)
+                        time = (grad.delay + np.array([0, *grad.tt, grad.shape_dur]))
                         waveform = g_factor * np.array((grad.first, *grad.waveform, grad.last))
                     else:
                         time = np.array(
@@ -100,16 +139,13 @@ def listen(
                                 grad.fall_time,
                             ))
                         waveform = g_factor * grad.amplitude * np.array([0, 0, 1, 1, 0])
-                    time_new =( grad.delay + np.linspace(0, grad.shape_dur, int(grad.shape_dur * rate), endpoint=False) + t0)
-                    buffer.append((time_new, time, waveform))
+                    buffer.append((time + t0, waveform))
         t0 += self.block_durations[block_counter]
 
-    time_new = np.concatenate([x[0] for x in buffer])
-    time = np.concatenate([x[1] for x in buffer])
-    waveform = np.concatenate([x[2] for x in buffer])
+    time = np.concatenate([x[0] for x in buffer])
+    waveform = np.concatenate([x[1] for x in buffer])
+    time_new = np.arange(0, int(np.max(time)*rate), dtype=np.float64) * 1 / rate  # New time axis
     total_waveform = np.interp(time_new, time, waveform)
-
-    print(total_waveform.shape, time_new.shape, time.shape, waveform.shape)
 
     if play_now:
         if is_jupyter_notebook():
@@ -126,5 +162,6 @@ def listen(
 def _listentoyourpulseq_patch():
     if not hasattr(Sequence, "listen"):
         Sequence.listen = listen
+        Sequence.duration_update = duration_update
     else:
         print("listen function already exists in Sequence class.")

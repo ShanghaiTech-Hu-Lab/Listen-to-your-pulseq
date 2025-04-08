@@ -12,11 +12,36 @@ from pypulseq import Sequence
 import pypulseq_audio
 
 seq = Sequence()
-seq.listen()
+
+seq.listen(play_now=True)
+
+duration = seq.duration_update(append_only=True)
 ```
 
-**Interface documentation:**
+### **Interface documentation:**
 
+
+**Sequence.duration_update**
+
+```python
+"""
+Duration calculation with reduced time cost. Designed for environments where duration is treated as an iteration condition.
+
+Parameters
+----------
+self : Sequence
+    The sequence object.
+append_only : bool, optional
+    If you can ensure that blocks will only be added sequentially and not deleted or inserted, then True. Else False.
+
+Returns
+----------
+duration : float
+    The total duration of the sequence in seconds.
+"""
+```
+
+**Sequence.listen**
 ```python
 """
 Listen to the waveform of the sequence.
