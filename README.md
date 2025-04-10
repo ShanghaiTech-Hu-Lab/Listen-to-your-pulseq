@@ -25,7 +25,7 @@ duration = seq.duration_update(append_only=True)
 
 ```python
 """
-Duration calculation with reduced time cost. Designed for environments where duration is treated as an iteration condition.
+Duration calculation with reduced time cost. Designed for environments where duration is used as an iteration condition.
 
 Parameters
 ----------
