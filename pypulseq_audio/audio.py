@@ -1,3 +1,4 @@
+from bisect import bisect_right
 from pypulseq.utils.cumsum import cumsum
 from pypulseq import Sequence
 from scipy.io.wavfile import write
@@ -17,20 +18,10 @@ def is_jupyter_notebook():
 
 def duration_update(self: Sequence, append_only = True) -> tuple:
     """
-    Duration calculation with reduced time cost. Designed for environments where duration is treated as an iteration condition.
-
-    Parameters
-    ----------
-    self : Sequence
-        The sequence object.
-    append_only : bool, optional
-        If you can ensure that blocks will only be added sequentially and not deleted or inserted, then True. Else False.
-
-    Returns
-    ----------
-    duration : float
-        The total duration of the sequence in seconds.
+    Duration calculation with reduced time overhead. Designed for environments where duration is treated as an iteration condition.
     """
+    if len(self.block_events) == 0:
+        return 0
     if not hasattr(self, '_duration_history'):
         duration = 0
         for block_counter in self.block_events.keys():
@@ -42,7 +33,7 @@ def duration_update(self: Sequence, append_only = True) -> tuple:
         if append_only:
             start_key = self._duration_history[1]
             keys = list(self.block_events.keys())
-            for block_counter in keys[keys.index(start_key)+1:]:
+            for block_counter in keys[bisect_right(keys, start_key):]:
                 duration += self.block_durations[block_counter]
         else:
             for block_counter in set(self.block_events.keys()).difference(self._duration_history[1].keys()):
